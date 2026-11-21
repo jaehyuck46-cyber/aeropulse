@@ -112,18 +112,29 @@ aeropulse/
 git clone https://github.com/jaehyuck46-cyber/aeropulse.git
 cd aeropulse
 
-# 2. 패키지 설치
+# 2. 가상환경 생성 및 패키지 설치
+python -m venv .venv
+.venv\Scripts\activate          # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 
-# 3. 인프라 실행 (Kafka + PostgreSQL)
+# 3. 데이터 준비
+# NASA Prognostics Data Repository에서 C-MAPSS FD001을 받아 data/ 에 넣는다
+#   data/train_FD001.txt, data/test_FD001.txt, data/RUL_FD001.txt
+
+# 4. 인프라 실행 (Kafka)
 docker compose up -d
 
-# 4. Consumer 실행 (터미널 1)
-python consumer/engine_consumer.py
+# 5. 토픽 생성 (최초 1회)
+docker exec kafka /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:9092 \
+  --create --topic engine-sensors --partitions 3
 
-# 5. Producer 실행 (터미널 2)
-python producer/engine_producer.py
+# 6. Producer 실행
+python producer/engine_producer.py --max-cycles 10   # 테스트: 10사이클
+python producer/engine_producer.py                   # 전체: 362사이클 (약 3분)
 ```
+
+인프라 종료: `docker compose down`
 
 ---
 
@@ -133,7 +144,7 @@ python producer/engine_producer.py
 |---|---|---|
 | Phase 0 | 목적 정의 · README 작성 | ✅ |
 | Phase 1 | EDA — 열화를 잘 보여주는 센서 선별 | ✅ |
-| Phase 2 | Kafka Producer / Consumer 구현 | ⬜ |
+| Phase 2 | Kafka Producer / Consumer 구현 | 🔄 Producer 완료 |
 | Phase 3 | PostgreSQL 스키마 설계 · 저장 | ⬜ |
 | Phase 4 | 이상 감지 로직 + 에러 처리 / 재시도 | ⬜ |
 | Phase 5 | RUL 모델 학습 (RandomForest → LSTM) | ⬜ |
@@ -151,7 +162,12 @@ python producer/engine_producer.py
 |---|---|
 | 메시지 key를 엔진 ID로 지정 | 같은 엔진 데이터는 같은 파티션 → 시계열 순서 보장 |
 | raw / processed 테이블 분리 | 가공 로직이 바뀌어도 원본으로 재처리 가능 |
-| _(추가 예정)_ | |
+| 센서 21개 중 14개만 전송 | EDA 결과 7개는 값이 변하지 않음 → 전송량·저장량 약 1/3 절감 |
+| Kafka를 KRaft 모드로 실행 | ZooKeeper가 필요 없어 컨테이너 1개로 구성 가능 |
+| Docker 이미지·패키지 버전 고정 (`apache/kafka:4.1.0`, `kafka-python==3.0.13`) | `latest`는 시점에 따라 동작이 달라져 재현성이 깨짐 |
+| 사이클 단위로 묶어 전송 (엔진별 순차 아님) | 엔진 100대가 동시에 운항하는 실제 상황을 재현 |
+| 전송 주기를 인자(`--max-cycles`)로 제어 | 코드 수정 없이 테스트(10사이클)와 전체 실행을 전환 |
+| Kafka에 volume 미설정 | 개발 단계에서는 `down`→`up`으로 초기화하는 편이 디버깅에 유리. 영속성이 필요해지는 Phase 3에서 추가 |
 
 ---
 
@@ -159,7 +175,8 @@ python producer/engine_producer.py
 
 | 문제 | 원인 | 해결 |
 |---|---|---|
-| _(진행하며 작성)_ | | |
+| 파티션이 3개일 때 같은 엔진의 센서 데이터가 여러 파티션으로 흩어져 시계열 순서가 깨질 수 있음 | Kafka는 순서를 파티션 단위로만 보장하는데, key가 없으면 메시지가 파티션에 분산 배치됨 | 메시지 key를 엔진 ID로 지정. `kafka-console-consumer.sh --property print.partition=true`로 엔진 1·5 → 파티션 0, 엔진 2·50 → 파티션 2에 항상 고정됨을 확인 |
+| 표준편차가 작은 센서를 수치만 보고 제외할 뻔함 (s15: 0.0375) | 센서마다 측정 단위와 값의 크기가 달라, 표준편차 절댓값만으로는 유용성을 판단할 수 없음 | RUL 대비 추세 그래프를 함께 확인 → s15는 뚜렷한 상승 추세를 보여 사용 센서로 채택 (상관 0.64) |
 
 ---
 
@@ -177,6 +194,13 @@ python producer/engine_producer.py
 2. 표준편차가 작아도 유용한 센서가 있음 (s15) → 수치만이 아니라 그래프로 반드시 확인
 3. 센서 값은 RUL 약 100까지 안정적이다가 이후 급격히 변함 (비선형) → RUL 상관계수가 최대 0.70에 머무는 이유
 4. s9, s14는 엔진마다 열화 방향이 달라 상관관계가 낮음 (0.39, 0.31) → 모델 단계에서 포함 여부 비교 예정
+
+### Phase 2 — Kafka Producer ([producer/engine_producer.py](producer/engine_producer.py))
+
+- Kafka 4.1.0 단일 브로커(KRaft) 구성, 토픽 `engine-sensors` 파티션 3개
+- C-MAPSS FD001을 사이클 순서로 재생해 엔진 100대의 동시 운항을 재현 (362사이클 × 0.5초 ≈ 3분)
+- 센서 14개만 JSON으로 직렬화해 전송, 메시지 key = 엔진 ID
+- **검증**: 10사이클(1,000건) 전송 후 Consumer 수신 확인, key별 파티션 고정 확인
 
 _(Phase 5 이후 추가 — 모델 성능 RMSE, 대시보드 스크린샷 등)_
 
