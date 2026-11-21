@@ -1,3 +1,4 @@
 pandas
 matplotlib
 ipykernel
+kafka-python==3.0.13
