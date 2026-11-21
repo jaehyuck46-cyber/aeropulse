@@ -109,7 +109,7 @@ aeropulse/
 
 ```bash
 # 1. 저장소 클론
-git clone https://github.com/<username>/aeropulse.git
+git clone https://github.com/jaehyuck46-cyber/aeropulse.git
 cd aeropulse
 
 # 2. 패키지 설치
