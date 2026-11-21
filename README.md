@@ -112,7 +112,7 @@ aeropulse/
 git clone https://github.com/jaehyuck46-cyber/aeropulse.git
 cd aeropulse
 
-# 2. 패키지 설치    
+# 2. 패키지 설치
 pip install -r requirements.txt
 
 # 3. 인프라 실행 (Kafka + PostgreSQL)
@@ -182,7 +182,7 @@ _(Phase 5 이후 추가 — 모델 성능 RMSE, 대시보드 스크린샷 등)_
 
 ---
 
-## 💡 12. 배운 점   
+## 💡 12. 배운 점
 
 _(프로젝트 완료 후 작성)_
 
