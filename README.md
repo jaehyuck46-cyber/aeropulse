@@ -112,7 +112,7 @@ aeropulse/
 git clone https://github.com/jaehyuck46-cyber/aeropulse.git
 cd aeropulse
 
-# 2. 패키지 설치
+# 2. 패키지 설치    
 pip install -r requirements.txt
 
 # 3. 인프라 실행 (Kafka + PostgreSQL)
@@ -182,7 +182,7 @@ _(Phase 5 이후 추가 — 모델 성능 RMSE, 대시보드 스크린샷 등)_
 
 ---
 
-## 💡 12. 배운 점
+## 💡 12. 배운 점   
 
 _(프로젝트 완료 후 작성)_
 
@@ -190,7 +190,7 @@ _(프로젝트 완료 후 작성)_
 
 ## 🔗 관련 프로젝트
 
-- [김포공항 항공편 지연 데이터 파이프라인](https://github.com/<username>/flight-delay-pipeline) — 배치 처리
+- [김포공항 항공편 지연 데이터 파이프라인](https://github.com/jaehyuck46-cyber/flight-delay-pipeline) — 배치 처리
 - **AeroPulse** — 실시간 스트리밍 처리
 
 ---
